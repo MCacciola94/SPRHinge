@@ -76,8 +76,8 @@ class Grid_Search():
 
                     save_dir = "saves/save_" + name
                     log_file = open("temp_logs/" + name, "w")
-                    #sys.stdout = log_file
-                    #sys.stderr = sys.stdout
+                    sys.stdout = log_file
+                    sys.stderr = sys.stdout
                     print(name)
                     
                     if dset == "Cifar10": num_classes = 10
@@ -113,16 +113,16 @@ class Grid_Search():
                 
                     #Creating the perspective regualriation function
                     #Compute M values for each layer using a trained model 
-                    # torch.save(model.state_dict(),name + "rand_init.ph")
-                    # base_checkpoint=torch.load("saves/save_" + arch + "_" + dset + "_first_original/checkpoint.th")
-                    # model.load_state_dict(base_checkpoint['state_dict'])
-                    # M=at.layerwise_M(model, scale = M_scale) #a dictionary withe hte value of M for each layer of the model
-                    # model.load_state_dict(torch.load(name  + "rand_init.ph"))
-                    # os.remove(name + "rand_init.ph")
+                    torch.save(model.state_dict(),name + "rand_init.ph")
+                    base_checkpoint=torch.load("saves/save_" + arch + "_" + dset + "_first_original/checkpoint.th")
+                    model.load_state_dict(base_checkpoint['state_dict'])
+                    M=at.layerwise_M(model, scale = M_scale) #a dictionary withe hte value of M for each layer of the model
+                    model.load_state_dict(torch.load(name  + "rand_init.ph"))
+                    os.remove(name + "rand_init.ph")
 
-                    #print("M values:\n",M)
+                    print("M values:\n",M)
                     
-                    reg = at.noReg # (pReg.myTools(alpha=alpha,M=M)).myReg 
+                    reg = (pReg.myTools(alpha=alpha,M=M)).myReg 
 
 
 

@@ -11,7 +11,7 @@ def default_conv(in_channels, out_channels, kernel_size=3, stride=1, bias=True, 
 
 
 class BasicBlock(nn.Sequential):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, bias=True, conv3x3=default_conv, args=None):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, bias=False, conv3x3=default_conv, args=None):
         modules = [conv3x3(in_channels, out_channels, kernel_size, stride=stride, bias=bias, args=args),
                    nn.BatchNorm2d(out_channels),
                    nn.ReLU(inplace=True)]
@@ -42,8 +42,10 @@ class ResBlock(nn.Module):
 
     def forward(self, x):
         out = self.body(x)
+        
         if self.downsample is not None:
             x = self.downsample(x)
+
         out += x
         out = self.act_out(out)
 

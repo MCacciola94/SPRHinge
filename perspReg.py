@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from spr_reg import spr_comp
 
 class myTools: 
    def __init__(self,alpha,M):
@@ -8,46 +9,19 @@ class myTools:
     #Computation of the current factor
    def myReg(self,net, loss, lamb = 0.1):
         reg = 0 
-        alpha=self.alpha
-        const=(torch.sqrt(torch.Tensor([alpha/(1-alpha)]))).cuda()
         tot=0
-        for m in net.modules():
-
-            #Fully Connected layers
-            if isinstance(m,torch.nn.Linear):
-                continue
-                M=self.M[m]
-                norminf=torch.norm(m.weight,dim=1,p=np.inf)
-                norm2= torch.norm(m.weight,dim=1,p=2)
-                num_el=m.in_features
-                tot+=m.in_features*m.out_features
-                
-            else:              
-            #Convolutional layers               
-                if isinstance(m,torch.nn.Conv2d):
-                    M=self.M[m]
-                    norminf=torch.norm(m.weight,dim=(1,2,3),p=np.inf)
-                    norm2= torch.norm(m.weight,dim=(1,2,3),p=2)
-                    num_el=m.kernel_size[0]*m.kernel_size[1]*m.in_channels
-                    tot+=m.kernel_size[0]*m.kernel_size[1]*m.in_channels*m.out_channels
-                else:
-                    continue
-
-
-            bo1 = torch.max(norminf/M,const*norm2)>=1
-            reg1 = norm2**2+1-alpha
-
-            bo2 = norminf/M<=const*norm2
-            reg2=const*norm2*(1+alpha)
-
-            eps=(torch.zeros(norminf.size())).cuda()
-            eps=eps+1e-10
-            reg3=norm2**2/(torch.max(eps,norminf))*M+(1-alpha)*norminf/M
-
-            bo2=torch.logical_and(bo2, torch.logical_not(bo1))
-            bo3=torch.logical_and(torch.logical_not(bo2), torch.logical_not(bo1))
-
-            reg+=(bo1*reg1+bo2*reg2+bo3*reg3).sum()*num_el
+        for m in net.find_modules():
+            m1, m2 = net.sparse_param(m)
+            projection1, projection2 = m1.weight, m2.weight          
+            A1 = projection1.squeeze().t()
+            A2 = projection2.squeeze().t()
+            c1, c2 = net.dense_param(m)
+            numel1 = A1.shape[1] + c1.kernel_size[0] * c1.kernel_size[1] * c1.in_channels
+            numel2 = A2.shape[1] + c2.kernel_size[0] * c2.kernel_size[1] * c2.in_channels
+            reg += numel1*spr_comp(A1, self.alpha, self.M[m1])
+            reg += numel2*spr_comp(A2, self.alpha, self.M[m2])
+            tot += numel1 + numel2 
+              
                         
         loss = loss +lamb* reg/tot
         reg=(lamb* reg/tot).item()

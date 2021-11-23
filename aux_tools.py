@@ -15,60 +15,42 @@ class ThresholdPruning(prune.BasePruningMethod):
 
 
 #Computing sparsity information of the model
-def sparsityRate(model,verb=False,opt="channels"):
+def sparsityRate(model,verb=False):
     out=[]
     tot_pruned=0
     tot_struct_pruned=0
-    for m in model.modules():
-        #Fully Connected layers
-        if isinstance(m,nn.Linear):
-            v=[]
-            for i in range(m.out_features):
-                el=float((m.weight[i,:]==0).sum()/m.weight[i,:].numel())
-                v=v+[el]
-                tot_pruned+=m.in_features*el
-                if el==1.0:
-                    tot_struct_pruned+=m.in_features
-                    
-                
-            if verb:
-                print("in module ",m,"\n sparsity of  ", v)
-            else:
-                print("\n sparsity of  ", v)
-            out=out+[v]
+    for m in model.find_modules():
+        m1, m2 = model.sparse_param(m)
+        projection1, projection2 = m1.weight, m2.weight  
+        A1 = projection1.squeeze().t()
+        A2 = projection2.squeeze().t()
+        c1, c2 = model.dense_param(m)
 
-        #Convolutional layers 
-        if isinstance(m,torch.nn.Conv2d):
-            if opt=="channels":
-                v=[]
-                for i in range(m.out_channels):
-                    el= float((m.weight[i,:,:,:]==0).sum()/m.weight[i,:,:,:].numel())
-                    v=v+[el]
+        v=[]
+        for i in range(A1.shape[0]):
+            el= float((A1[i,:]==0).sum()/A1[i,:].numel())
+            v=v+[el]
 
-                    tot_pruned+=m.kernel_size[0]*m.kernel_size[1]*m.in_channels*el
-                    if el==1.0:
-                        tot_struct_pruned+=m.kernel_size[0]*m.kernel_size[1]*m.in_channels
+            tot_pruned+=(A1.shape[1] + c1.kernel_size[0] * c1.kernel_size[1] * c1.in_channels) * el
+            if el==1.0:
+                tot_struct_pruned += A1.shape[1] + c1.kernel_size[0] * c1.kernel_size[1] * c1.in_channels
 
-                if verb:
-                    print("in module ",m,"\n sparsity of  ", v)
-                else:
-                    print("\n sparsity of  ", v)
-                out=out+[v]
-            else:
-                v=[]
-                for i in range(m.out_channels):
-                    for j in range(m.in_channels):
-                        el= float((m.weight[i,j,:,:]==0).sum()/m.weight[i,j,:,:].numel())
-                        v=v+[el]
+        for i in range(A2.shape[0]):
+            el= float((A2[i,:]==0).sum()/A2[i,:].numel())
+            v=v+[el]
 
-                        tot_pruned+=m.kernel_size[0]*m.kernel_size[1]*el
-                        if el==1.0:
-                            tot_struct_pruned+=m.kernel_size[0]*m.kernel_size[1]
+            tot_pruned+=(A2.shape[1] + c2.kernel_size[0] * c2.kernel_size[1] * c2.in_channels) * el
+            if el==1.0:
+                tot_struct_pruned += A2.shape[1] + c2.kernel_size[0] * c2.kernel_size[1] * c2.in_channels
+        
 
-                        if verb:
-                            print("\n sparsity of  ", v)
 
-                        out=out+[v]
+        if verb:
+            print("in module ",m,"\n sparsity of  ", v)
+        else:
+            print("\n sparsity of  ", v)
+        out=out+[v]
+           
 
     return out,(tot_pruned,tot_struct_pruned)
 

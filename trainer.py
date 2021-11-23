@@ -7,6 +7,8 @@ import torch
 from torch.nn.utils import prune
 
 import aux_tools as at
+import ipcomp as ipc
+import flops_counter as fc
 
 
 
@@ -80,7 +82,8 @@ class Trainer():
 
         print("\n Elapsed time for training ", datetime.now()-start)
 
-
+        
+            
         spars, tot_p = at.sparsityRate(self.model)
         # i=0
         # while i < len(spars):
@@ -92,14 +95,11 @@ class Trainer():
 
 
         # Pruning parameters under the threshold
-        for m in self.model.modules(): 
-            if hasattr(m, 'weight'):
-                pruning_par=[((m,'weight'))]
-
-                if hasattr(m, 'bias') and not(m.bias==None):
-                        pruning_par.append((m,'bias'))
-
-                prune.global_unstructured(pruning_par, pruning_method=at.ThresholdPruning, threshold=self.threshold)
+        for m in self.model.find_modules():
+            m1, m2 = self.model.sparse_param(m) 
+            pruning_par=[((m1,'weight')), ((m2,'weight'))]
+            prune.global_unstructured(pruning_par, pruning_method=at.ThresholdPruning, threshold=self.threshold)
+      
 
         spars, tot_p = at.sparsityRate(self.model)
         
@@ -122,15 +122,26 @@ class Trainer():
         self.best_prec1 = 0
 
         #recovering all pruned weights that are not in a pruned entity
-        for m in self.model.modules():
-            if isinstance(m,torch.nn.Conv2d):
-                for i in range(m.out_channels):
-                        if m.weight_mask[i,:].sum()/m.weight_mask[i,:].numel()>0.05:
-                            m.weight_mask[i,:]=1
-                        else:
-                            m.weight_mask[i,:]=0
+        for m in self.model.find_modules():
+            m1, m2 = self.model.sparse_param(m)
+            projection1_mask, projection2_mask = m1.weight_mask, m2.weight_mask         
+            A1_mask = projection1_mask.squeeze().t()
+            A2_mask = projection2_mask.squeeze().t()
 
-        spars, tot_ = at.sparsityRate(self.model)
+            for i in range(A1_mask.shape[0]):
+                    if A1_mask[i,:].sum()/A1_mask[i,:].numel()>0.05:
+                        A1_mask[i,:]=1
+                    else:
+                        A1_mask[i,:]=0
+
+            for i in range(A2_mask.shape[0]):
+                    if A2_mask[i,:].sum()/A2_mask[i,:].numel()>0.05:
+                        A2_mask[i,:]=1
+                    else:
+                        A2_mask[i,:]=0
+            #print(A1_mask, A2_mask)            
+
+        spars, tot_p = at.sparsityRate(self.model)
         
         #as above
         # i=0
@@ -140,6 +151,7 @@ class Trainer():
         print("\nTotal parameter pruned:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")
 
         self.validate()
+       
 
 
         for epoch in range(epochs, epochs + finetuning_epochs):
@@ -179,9 +191,15 @@ class Trainer():
         #     print("\n Percentage of pruned entities ", (np.array(spars[i])==1).sum()/np.array(spars[i]).size, "total entities in this layer", np.array(spars[i]).size)
         #     i=i+1
         print("Total parameter pruned:", tot_p[0], "(unstructured)", tot_p[1],"(structured)")
-        
+        print("in place parameters ",fc.get_model_parameters(self.model))
         self.validate(reg_on = False)
+
+        ipc.compress(self.model)
+
+        self.validate(reg_on = False)
+        print("in place parameters ",fc.get_model_parameters(self.model))
         print("Best accuracy: ", self.best_prec1)
+        #print(self.model)
 
 
 

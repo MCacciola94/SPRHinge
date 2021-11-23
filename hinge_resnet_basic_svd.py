@@ -114,7 +114,7 @@ def modify_network(net_current):
                         'weight2': weight2, 'projection2': projection2, 'bias2': None})
         set_module_param(module_cur, params)
     
-    print("111111111111111111111")
+
     
 
 def make_model(args):
@@ -137,7 +137,7 @@ class Hinge(ResNet):
         self.register_buffer('running_grad_ratio', None)
 
         modify_network(self)
-        print("22222222222222222")
+
       
 
 
@@ -146,8 +146,14 @@ class Hinge(ResNet):
 
     def sparse_param(self, module):
         # embed()
-        param1 = module.state_dict(keep_vars=True)['body.0.1.weight']
-        param2 = module.state_dict(keep_vars=True)['body.3.1.weight']
+        param1 = module._modules['body']._modules["0"]._modules["1"]
+        param2 = module._modules['body']._modules["3"]._modules["1"]
+        return param1, param2
+    
+    def dense_param(self, module):
+        # embed()
+        param1 = module._modules['body']._modules["0"]._modules["0"]
+        param2 = module._modules['body']._modules["3"]._modules["0"]
         return param1, param2
 
     def compress(self, **kwargs):
